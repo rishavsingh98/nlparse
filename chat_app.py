@@ -485,6 +485,8 @@ def main():
         st.session_state.last_processed_input = ""
     if 'original_request' not in st.session_state:
         st.session_state.original_request = ""
+    if 'new_request_triggered' not in st.session_state:
+        st.session_state.new_request_triggered = False
 
     # Helper functions for the UI
     def initialize_assistant():
@@ -727,6 +729,7 @@ def main():
         st.session_state.conversation_state = "ready"
         st.session_state.last_processed_input = ""
         st.session_state.original_request = ""
+        st.session_state.new_request_triggered = True  # Set flag to prevent re-execution
         add_chat_message("system", "New conversation started")
 
     def clear_chat():
@@ -740,6 +743,7 @@ def main():
         st.session_state.conversation_state = "ready"
         st.session_state.last_processed_input = ""
         st.session_state.original_request = ""
+        st.session_state.new_request_triggered = False
 
     # Main header
     st.markdown("""
@@ -779,13 +783,18 @@ def main():
     with col2:
         new_request_disabled = st.session_state.conversation_state in ["processing"]
         
-        if st.button("New Request", type="primary", disabled=new_request_disabled):
-            start_new_request()
-            st.rerun()
+        if st.button("New Request", type="primary", disabled=new_request_disabled, key="new_request_btn"):
+            if not st.session_state.new_request_triggered:  # Only process if not already triggered
+                start_new_request()
+                st.rerun()
         
-        if st.button("Clear Chat"):
+        if st.button("Clear Chat", key="clear_chat_btn"):
             clear_chat()
             st.rerun()
+    
+    # Reset the flag after the button area to prevent re-execution
+    if st.session_state.new_request_triggered:
+        st.session_state.new_request_triggered = False
 
     # Main interface
     col_chat, col_json = st.columns([2, 1])
