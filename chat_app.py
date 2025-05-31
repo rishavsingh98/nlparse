@@ -451,6 +451,8 @@ def main():
         st.session_state.current_confidence = 0.0
     if 'pending_followups' not in st.session_state:
         st.session_state.pending_followups = []
+    if 'current_followup_index' not in st.session_state:
+        st.session_state.current_followup_index = 0
     if 'assistant' not in st.session_state:
         st.session_state.assistant = None
     if 'provider' not in st.session_state:
@@ -637,21 +639,36 @@ def main():
         st.session_state.current_confidence = response.confidence_score or 0.0
         st.session_state.pending_followups = response.follow_up_questions.copy() if response.follow_up_questions else []
         
-        # Update conversation state
-        if st.session_state.pending_followups:
-            st.session_state.conversation_state = "waiting_followup"
+        # Handle follow-up question progression
+        if is_followup and st.session_state.pending_followups:
+            # Advance to next follow-up question
+            st.session_state.current_followup_index += 1
+            
+            # Check if we've answered all follow-up questions
+            if st.session_state.current_followup_index >= len(st.session_state.pending_followups):
+                st.session_state.conversation_state = "complete"
+                st.session_state.current_followup_index = 0
+            else:
+                st.session_state.conversation_state = "waiting_followup"
         else:
-            st.session_state.conversation_state = "complete"
+            # New request or no follow-ups needed
+            if st.session_state.pending_followups:
+                st.session_state.conversation_state = "waiting_followup"
+                st.session_state.current_followup_index = 0
+            else:
+                st.session_state.conversation_state = "complete"
+                st.session_state.current_followup_index = 0
         
         # Generate response message
         if response.follow_up_questions:
-            if len(response.follow_up_questions) == 1:
-                chat_response = response.follow_up_questions[0]
+            # Ask follow-up questions one at a time
+            current_question_index = st.session_state.current_followup_index
+            if current_question_index < len(response.follow_up_questions):
+                chat_response = response.follow_up_questions[current_question_index]
             else:
-                chat_response = "I need a few more details:\n"
-                for i, question in enumerate(response.follow_up_questions, 1):
-                    chat_response += f"{i}. {question}\n"
-                chat_response = chat_response.strip()
+                # All questions answered, mark as complete
+                chat_response = f"Perfect! I've identified this as a {response.intent_category.replace('_', ' ').title().lower()} request and have all the details needed."
+                st.session_state.conversation_state = "complete"
         else:
             intent_text = response.intent_category.replace("_", " ").title()
             if response.intent_category == "other":
@@ -672,6 +689,7 @@ def main():
         st.session_state.current_intent = ""
         st.session_state.current_confidence = 0.0
         st.session_state.pending_followups = []
+        st.session_state.current_followup_index = 0
         st.session_state.conversation_state = "ready"
         st.session_state.last_processed_input = ""
         st.session_state.original_request = ""
@@ -683,6 +701,7 @@ def main():
         st.session_state.current_intent = ""
         st.session_state.current_confidence = 0.0
         st.session_state.pending_followups = []
+        st.session_state.current_followup_index = 0
         st.session_state.conversation_state = "ready"
         st.session_state.last_processed_input = ""
         st.session_state.original_request = ""
@@ -748,7 +767,8 @@ def main():
             </div>
             """, unsafe_allow_html=True)
         elif st.session_state.conversation_state == "waiting_followup":
-            st.info("Please answer the follow-up questions below")
+            follow_up_progress = f"{st.session_state.current_followup_index + 1}/{len(st.session_state.pending_followups)}" if st.session_state.pending_followups else "1/1"
+            st.info(f"Question {follow_up_progress}: Please answer the follow-up question above")
         elif st.session_state.conversation_state == "complete":
             st.success("Request complete! Use 'New Request' to start over")
         
@@ -784,7 +804,9 @@ def main():
         if st.session_state.conversation_state in ["ready", "waiting_followup"]:
             with st.form("chat_input_form", clear_on_submit=True):
                 if st.session_state.conversation_state == "waiting_followup":
-                    placeholder = "Answer the follow-up question(s) above..."
+                    question_num = st.session_state.current_followup_index + 1
+                    total_questions = len(st.session_state.pending_followups)
+                    placeholder = f"Answer question {question_num}/{total_questions} above..."
                 else:
                     placeholder = "Example: Book a restaurant for Italian dinner for today 8 pm"
                 
@@ -861,12 +883,20 @@ def main():
             # Clean up entities for display - remove None values but keep during processing
             clean_entities = {k: v for k, v in st.session_state.get('current_entities', {}).items() if v is not None and v != ""}
             
+            # Show current follow-up question being asked
+            current_missing_info = []
+            if st.session_state.conversation_state == "waiting_followup" and st.session_state.pending_followups:
+                current_index = st.session_state.current_followup_index
+                if current_index < len(st.session_state.pending_followups):
+                    current_missing_info = [st.session_state.pending_followups[current_index]]
+            
             current_json = {
                 "intent_category": st.session_state.get('current_intent', ''),
                 "entities": clean_entities,
                 "confidence_score": st.session_state.get('current_confidence', 0.0),
                 "status": "complete" if st.session_state.conversation_state == "complete" else ("pending" if st.session_state.get('pending_followups', []) else "processing"),
-                "missing_info": st.session_state.get('pending_followups', []),
+                "missing_info": current_missing_info,
+                "followup_progress": f"{st.session_state.current_followup_index}/{len(st.session_state.pending_followups)}" if st.session_state.pending_followups else "0/0",
                 "timestamp": datetime.now().isoformat()
             }
             
