@@ -39,7 +39,16 @@ Watch your JSON structure build in real-time as the conversation progresses. No 
 
 ### 🔍 Web Search Integration
 
-For requests that don't fit the main categories, NLParse can search the web and provide relevant information with fallback suggestions.
+**Automatic Web Intelligence for General Queries**
+
+When NLParse encounters requests outside its main categories (dining, travel, gifting, cab booking), it automatically:
+
+1. **Performs intelligent web searches** using multiple providers (DuckDuckGo API primary, with fallbacks)
+2. **Retrieves and analyzes top results** from the web
+3. **Uses AI to synthesize information** into helpful, conversational responses
+4. **Handles SSL/certificate errors gracefully** with automatic fallback to mock data
+
+This means you can ask about anything - government procedures, how-to guides, general information - and get helpful responses!
 
 ### 🤖 Multiple AI Backends
 
@@ -95,13 +104,25 @@ Examples:
 
 ### Other Intent + Web Search
 
-For general queries, NLParse performs web searches and provides contextual information:
+**AI-Powered Web Search for Any Query**
+
+NLParse intelligently handles general knowledge questions by:
+
+- Searching the web for relevant information
+- Using AI to synthesize and summarize results
+- Providing step-by-step instructions when found
+- Including source references for credibility
 
 Examples:
 
-- "How to update address in Aadhaar card"
-- "Apply for passport online procedure"
-- "Income tax filing deadline 2024"
+- "How to update address in Aadhaar card" → Step-by-step UIDAI process
+- "Apply for passport online procedure" → Complete application guide
+- "Income tax filing deadline 2024" → Current deadlines and requirements
+- "Reset Windows password" → Technical troubleshooting steps
+- "Python installation on Mac" → Platform-specific instructions
+- "Latest AI trends 2024" → Summarized industry insights
+
+**How it works:** The AI classifies these as "other" intent, triggers web search, and generates comprehensive responses based on current web information.
 
 ## Local Setup
 
@@ -109,6 +130,9 @@ Examples:
 
 - Python 3.9 or higher
 - Git
+- Internet connection (for web search features)
+
+**Note:** All required Python packages including web search dependencies (`requests`, `certifi`, `urllib3`) are automatically installed via `requirements.txt`
 
 ### Platform-Specific Python Installation
 
@@ -509,7 +533,42 @@ pip install --user -r requirements.txt
 
 #### SSL/Certificate Errors
 
-These are handled gracefully and won't break the app. The fallback processing still works perfectly on all platforms.
+**For Web Search Feature:**
+
+If you encounter SSL certificate errors during web searches, the app automatically:
+
+1. Falls back to mock search data for testing
+2. Continues to work with reduced web search capability
+3. Still provides helpful responses based on patterns
+
+To fix SSL issues:
+
+**Windows:**
+
+```powershell
+# Update certificates
+pip install --upgrade certifi
+```
+
+**Linux:**
+
+```bash
+# Install ca-certificates
+sudo apt-get update && sudo apt-get install ca-certificates
+# or for RedHat-based:
+sudo yum install ca-certificates
+```
+
+**macOS:**
+
+```bash
+# Update certificates via Homebrew
+brew install ca-certificates
+# or
+pip install --upgrade certifi
+```
+
+These errors won't prevent the app from running - web search will use fallback data automatically.
 
 #### Ollama Troubleshooting
 

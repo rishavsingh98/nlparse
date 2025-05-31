@@ -46,9 +46,9 @@ install_streamlit() {
 start_app() {
     local python_cmd=$1
     local version_name=$2
-    echo "✅ Using $version_name with streamlit"
-    echo "🌐 App will be available at: http://localhost:8505"
-    echo "🛑 Press Ctrl+C to stop the server"
+    echo "Using $version_name with streamlit"
+    echo "App will be available at: http://localhost:8505"
+    echo "Press Ctrl+C to stop the server"
     $python_cmd -m streamlit run chat_app.py --server.port 8505
 }
 
@@ -79,8 +79,8 @@ for cmd_info in "${PYTHON_COMMANDS[@]}"; do
 done
 
 # If we get here, nothing worked
-echo "❌ Could not find a suitable Python installation with streamlit"
-echo "📋 Please ensure Python 3.9+ is installed and try:"
-echo "   pip install streamlit"
-echo "   python3 -m streamlit run chat_app.py --server.port 8505"
+echo "Could not find a suitable Python installation with streamlit"
+echo "Please ensure Python 3.9+ is installed and try:"
+echo "pip install streamlit"
+echo "python3 -m streamlit run chat_app.py --server.port 8505"
 exit 1 

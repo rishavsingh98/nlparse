@@ -4,6 +4,7 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 import re
 import time
+from web_search import WebSearcher
 
 # Import both assistant types
 try:
@@ -41,10 +42,8 @@ def fallback_intent_classifier(user_input: str) -> Dict[str, Any]:
     # Determine best intent
     if scores:
         best_intent = max(scores, key=scores.get)
-        confidence = min(scores[best_intent] * 0.15 + 0.3, 0.9)
     else:
         best_intent = "other"
-        confidence = 0.3
     
     # Extract basic entities using regex patterns
     entities = {}
@@ -205,6 +204,28 @@ def fallback_intent_classifier(user_input: str) -> Dict[str, Any]:
     # Don't clean up entities - keep None values so follow-up questions can be generated
     # Only remove empty strings, but keep None values for required field detection
     entities = {k: v for k, v in entities.items() if v != ""}
+    
+    # For "other" intent, perform web search
+    if best_intent == "other":
+        try:
+            web_searcher = WebSearcher()
+            search_summary = web_searcher.get_search_summary(user_input)
+            
+            # Create a simple response based on search results
+            if "No search results found" not in search_summary:
+                entities["web_search_performed"] = True
+                entities["search_query"] = user_input
+                entities["ai_response"] = f"Based on web search results:\n\n{search_summary}"
+                confidence = 0.75  # Higher confidence with web results
+            else:
+                confidence = 0.3
+        except Exception as e:
+            print(f"Web search failed in fallback classifier: {e}")
+            confidence = 0.3
+    elif scores:
+        confidence = min(scores[best_intent] * 0.15 + 0.3, 0.9)
+    else:
+        confidence = 0.3
     
     return {
         "intent_category": best_intent,
@@ -487,31 +508,100 @@ def main():
         st.session_state.original_request = ""
     if 'new_request_triggered' not in st.session_state:
         st.session_state.new_request_triggered = False
+    if 'available_providers' not in st.session_state:
+        st.session_state.available_providers = {}
+    if 'selected_provider' not in st.session_state:
+        st.session_state.selected_provider = None
 
     # Helper functions for the UI
-    def initialize_assistant():
-        provider, message = detect_available_provider()
+    def check_all_providers():
+        """Check availability of all AI providers"""
+        providers = {}
         
-        if provider == "openai":
+        # Check OpenAI
+        if openai_available:
+            try:
+                is_available, message = OpenAIPersonalAssistant.is_available()
+                providers['openai'] = {
+                    'available': is_available,
+                    'name': 'OpenAI GPT-3.5',
+                    'message': message
+                }
+            except:
+                providers['openai'] = {
+                    'available': False,
+                    'name': 'OpenAI GPT-3.5',
+                    'message': 'OpenAI not configured'
+                }
+        else:
+            providers['openai'] = {
+                'available': False,
+                'name': 'OpenAI GPT-3.5',
+                'message': 'OpenAI module not installed'
+            }
+        
+        # Check Ollama
+        if ollama_available:
+            try:
+                is_available, message = OllamaPersonalAssistant.is_available()
+                providers['ollama'] = {
+                    'available': is_available,
+                    'name': 'Ollama Llama 3.2',
+                    'message': message
+                }
+            except:
+                providers['ollama'] = {
+                    'available': False,
+                    'name': 'Ollama Llama 3.2',
+                    'message': 'Ollama not available'
+                }
+        else:
+            providers['ollama'] = {
+                'available': False,
+                'name': 'Ollama Llama 3.2',
+                'message': 'Ollama module not installed'
+            }
+        
+        return providers
+    
+    def initialize_assistant(force_provider=None):
+        """Initialize the AI assistant with the selected or available provider"""
+        # Use force_provider if specified, otherwise use selected provider
+        provider_to_use = force_provider or st.session_state.selected_provider
+        
+        # Check if we need to reinitialize (provider changed)
+        if (st.session_state.assistant is not None and 
+            st.session_state.provider != provider_to_use):
+            st.session_state.assistant = None
+        
+        # If assistant already initialized with correct provider, return success
+        if (st.session_state.assistant is not None and 
+            st.session_state.provider == provider_to_use):
+            return True, st.session_state.available_providers.get(provider_to_use, {}).get('name', 'AI Assistant')
+        
+        if provider_to_use == "openai" and st.session_state.available_providers.get('openai', {}).get('available'):
             try:
                 st.session_state.assistant = OpenAIPersonalAssistant()
                 st.session_state.provider = "openai"
                 return True, "OpenAI GPT-3.5"
-            except ValueError as e:
-                if ollama_available:
-                    provider, message = OllamaPersonalAssistant.is_available()
-                    if "running with" in message:
-                        st.session_state.assistant = OllamaPersonalAssistant()
-                        st.session_state.provider = "ollama"
-                        return True, "Ollama Llama 3.2"
+            except Exception as e:
                 return False, str(e)
         
-        elif provider == "ollama":
-            st.session_state.assistant = OllamaPersonalAssistant()
-            st.session_state.provider = "ollama"
-            return True, "Ollama Llama 3.2"
+        elif provider_to_use == "ollama" and st.session_state.available_providers.get('ollama', {}).get('available'):
+            try:
+                st.session_state.assistant = OllamaPersonalAssistant()
+                st.session_state.provider = "ollama"
+                return True, "Ollama Llama 3.2"
+            except Exception as e:
+                return False, str(e)
         
-        return False, message
+        # Fallback: try to find any available provider
+        if not provider_to_use:
+            for provider, info in st.session_state.available_providers.items():
+                if info['available']:
+                    return initialize_assistant(force_provider=provider)
+        
+        return False, "No AI provider available or selected"
 
     def get_confidence_class(score):
         if score >= 0.8:
@@ -559,6 +649,25 @@ def main():
                 
                 # Directly map the answer to the correct field
                 st.session_state.current_entities[current_field] = user_input.strip()
+                
+                # For follow-ups, re-query the AI with full context for updated confidence
+                if st.session_state.assistant:
+                    try:
+                        # Build complete context
+                        full_context = st.session_state.original_request + ". "
+                        for field, value in st.session_state.current_entities.items():
+                            if value:
+                                full_context += f"{field.replace('_', ' ')}: {value}. "
+                        
+                        # Get updated assessment from AI
+                        response = st.session_state.assistant.process_input(
+                            full_context,
+                            st.session_state.current_entities
+                        )
+                        st.session_state.current_confidence = response.confidence_score
+                    except:
+                        # Keep existing confidence if AI fails
+                        pass
                 
                 # Advance to next question
                 st.session_state.current_followup_index += 1
@@ -706,7 +815,17 @@ def main():
             st.session_state.pending_followups = []
             
             if response.intent_category == "other":
-                chat_response = "I understand this is a general inquiry. Let me help you with that."
+                # Check if web search was performed and we have an AI response
+                if (hasattr(response, 'entities') and 
+                    response.entities and 
+                    response.entities.get('web_search_performed') and 
+                    response.entities.get('ai_response')):
+                    
+                    # Use the AI-generated response from web search
+                    chat_response = response.entities['ai_response']
+                else:
+                    # Fallback message if no web search response
+                    chat_response = "I understand this is a general inquiry. Let me help you with that."
             else:
                 intent_text = response.intent_category.replace("_", " ").title()
                 chat_response = f"Perfect! I've identified this as a {intent_text.lower()} request and have all the details needed."
@@ -733,6 +852,7 @@ def main():
         add_chat_message("system", "New conversation started")
 
     def clear_chat():
+        # Clear all conversation-related state
         st.session_state.chat_history = []
         st.session_state.current_entities = {}
         st.session_state.current_intent = ""
@@ -740,10 +860,12 @@ def main():
         st.session_state.pending_followups = []
         st.session_state.current_followup_index = 0
         st.session_state.followup_field_mapping = []
+        st.session_state.all_required_fields = []
         st.session_state.conversation_state = "ready"
         st.session_state.last_processed_input = ""
         st.session_state.original_request = ""
         st.session_state.new_request_triggered = False
+        # Note: We don't reset provider settings or assistant
 
     # Main header
     st.markdown("""
@@ -754,13 +876,61 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
+    # Check available providers if not already done
+    if not st.session_state.available_providers:
+        st.session_state.available_providers = check_all_providers()
+        
+        # Select the first available provider if none selected
+        if not st.session_state.selected_provider:
+            for provider, info in st.session_state.available_providers.items():
+                if info['available']:
+                    st.session_state.selected_provider = provider
+                    break
+
     # Initialize assistant
     assistant_ready, provider_info = initialize_assistant()
 
-    # Provider status
+    # Provider status and switcher
     col1, col2 = st.columns([3, 1])
 
     with col1:
+        # Provider switcher
+        st.markdown("**AI Provider:**")
+        provider_cols = st.columns(2)
+        
+        with provider_cols[0]:
+            openai_info = st.session_state.available_providers.get('openai', {})
+            openai_disabled = not openai_info.get('available', False)
+            
+            if st.button(
+                "🤖 OpenAI GPT-3.5",
+                disabled=openai_disabled,
+                type="primary" if st.session_state.selected_provider == "openai" else "secondary",
+                key="select_openai",
+                help=openai_info.get('message', 'OpenAI not available')
+            ):
+                if st.session_state.selected_provider != "openai":
+                    st.session_state.selected_provider = "openai"
+                    st.session_state.assistant = None  # Force re-initialization
+                    st.rerun()
+        
+        with provider_cols[1]:
+            ollama_info = st.session_state.available_providers.get('ollama', {})
+            ollama_disabled = not ollama_info.get('available', False)
+            
+            if st.button(
+                "🦙 Ollama Llama 3.2",
+                disabled=ollama_disabled,
+                type="primary" if st.session_state.selected_provider == "ollama" else "secondary",
+                key="select_ollama",
+                help=ollama_info.get('message', 'Ollama not available')
+            ):
+                if st.session_state.selected_provider != "ollama":
+                    st.session_state.selected_provider = "ollama"
+                    st.session_state.assistant = None  # Force re-initialization
+                    st.rerun()
+        
+        # Provider status
         if assistant_ready:
             provider_class = f"{st.session_state.provider}-badge" if st.session_state.provider else "ollama-badge"
             st.markdown(f"""
@@ -817,7 +987,6 @@ def main():
             st.success("Request complete! Use 'New Request' to start over")
         
         # Display chat history
-        st.markdown('<div class="chat-container">', unsafe_allow_html=True)
         if st.session_state.chat_history:
             for message in st.session_state.chat_history:
                 if message["role"] == "user":
@@ -842,7 +1011,6 @@ def main():
                     """, unsafe_allow_html=True)
         else:
             st.info("Welcome to NLParse! Start by typing your request below.")
-        st.markdown('</div>', unsafe_allow_html=True)
         
         # Input form
         if st.session_state.conversation_state in ["ready", "waiting_followup"]:
@@ -944,9 +1112,7 @@ def main():
                 "timestamp": datetime.now().isoformat()
             }
             
-            st.markdown('<div class="json-container">', unsafe_allow_html=True)
             st.json(current_json)
-            st.markdown('</div>', unsafe_allow_html=True)
             
             # Export functionality
             if st.session_state.conversation_state == "complete" and clean_entities:
