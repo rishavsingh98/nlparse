@@ -102,95 +102,379 @@ Examples:
 ### Prerequisites
 
 - Python 3.9 or higher
-- Git (obviously)
+- Git
+
+### Platform-Specific Python Installation
+
+#### 🪟 **Windows**
+
+1. **Download Python from [python.org](https://www.python.org/downloads/)**
+
+   - Make sure to check "Add Python to PATH" during installation
+   - Or install via Microsoft Store: `python3`
+
+2. **Alternative - Using Chocolatey**
+
+```powershell
+# Install Chocolatey first, then:
+choco install python git
+```
+
+3. **Alternative - Using winget**
+
+```powershell
+winget install Python.Python.3.11
+winget install Git.Git
+```
+
+#### 🐧 **Linux**
+
+**Ubuntu/Debian:**
+
+```bash
+sudo apt update
+sudo apt install python3 python3-pip git
+```
+
+**CentOS/RHEL/Fedora:**
+
+```bash
+# CentOS/RHEL
+sudo yum install python3 python3-pip git
+
+# Fedora
+sudo dnf install python3 python3-pip git
+```
+
+**Arch Linux:**
+
+```bash
+sudo pacman -S python python-pip git
+```
+
+#### 🍎 **macOS**
+
+**Using Homebrew (Recommended):**
+
+```bash
+brew install python@3.11 git
+```
+
+**Using MacPorts:**
+
+```bash
+sudo port install python311 git
+```
+
+**Direct Download:**
+Download from [python.org](https://www.python.org/downloads/macos/)
 
 ### Quick Start
 
-1. **Clone and enter the project**
+#### 🪟 **Windows Setup**
 
-```bash
-git clone <your-repo-url>
-cd ChatBot
+1. **Clone the repository**
+
+```powershell
+git clone https://github.com/rishavsingh98/nlparse.git
+cd nlparse
 ```
 
-2. **Install dependencies**
+2. **Create virtual environment (recommended)**
+
+```powershell
+python -m venv venv
+venv\Scripts\activate
+```
+
+3. **Install dependencies**
+
+```powershell
+pip install -r requirements.txt
+```
+
+4. **Run the application**
+
+```powershell
+# Method 1: Use the provided batch script
+.\run.bat
+
+# Method 2: Direct Python
+python -m streamlit run chat_app.py --server.port 8505
+
+# Method 3: If you have multiple Python versions
+py -3 -m streamlit run chat_app.py --server.port 8505
+```
+
+5. **Open your browser**
+   Navigate to `http://localhost:8505`
+
+#### 🐧 **Linux Setup**
+
+1. **Clone the repository**
+
+```bash
+git clone https://github.com/rishavsingh98/nlparse.git
+cd nlparse
+```
+
+2. **Create virtual environment (recommended)**
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+3. **Install dependencies**
 
 ```bash
 pip install -r requirements.txt
 ```
 
-3. **Run the app**
+4. **Run the application**
 
 ```bash
-# Easy way - use the provided script
+# Method 1: Use the provided script
+chmod +x run.sh
 ./run.sh
 
-# Manual way
+# Method 2: Direct Python
+python3 -m streamlit run chat_app.py --server.port 8505
+```
+
+5. **Open your browser**
+   Navigate to `http://localhost:8505`
+
+#### 🍎 **macOS Setup**
+
+1. **Clone the repository**
+
+```bash
+git clone https://github.com/rishavsingh98/nlparse.git
+cd nlparse
+```
+
+2. **Create virtual environment (recommended)**
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+3. **Install dependencies**
+
+```bash
+pip install -r requirements.txt
+```
+
+4. **Run the application**
+
+```bash
+# Method 1: Use the provided script
+./run.sh
+
+# Method 2: Direct Python
+python3 -m streamlit run chat_app.py --server.port 8505
+
+# Method 3: Specific Python path (if issues)
 /usr/bin/python3 -m streamlit run chat_app.py --server.port 8505
 ```
 
-4. **Open your browser**
+5. **Open your browser**
    Navigate to `http://localhost:8505`
-
-That's it! The app works out of the box with rule-based processing.
 
 ### Optional AI Setup
 
-Want better accuracy? Set up an AI backend:
+#### OpenAI Setup (All Platforms)
 
-#### Option 1: OpenAI (Recommended)
+**Windows (PowerShell):**
+
+```powershell
+$env:OPENAI_API_KEY="your_api_key_here"
+# For permanent setting:
+[Environment]::SetEnvironmentVariable("OPENAI_API_KEY", "your_api_key_here", "User")
+```
+
+**Windows (Command Prompt):**
+
+```cmd
+set OPENAI_API_KEY=your_api_key_here
+```
+
+**Linux/macOS:**
 
 ```bash
 export OPENAI_API_KEY="your_api_key_here"
+
+# For permanent setting, add to ~/.bashrc or ~/.zshrc:
+echo 'export OPENAI_API_KEY="your_api_key_here"' >> ~/.bashrc
 ```
 
 Get your API key from [OpenAI Platform](https://platform.openai.com/)
 
-#### Option 2: Ollama (Local & Free)
+#### Ollama Setup (Local & Free)
+
+**🪟 Windows:**
+
+```powershell
+# Download and install from https://ollama.com/download/windows
+# Or using winget:
+winget install Ollama.Ollama
+
+# Start Ollama (runs as service automatically)
+# Download the model
+ollama pull llama3.2:3b
+```
+
+**🐧 Linux:**
 
 ```bash
 # Install Ollama
-brew install ollama
+curl -fsSL https://ollama.com/install.sh | sh
 
 # Start the service
+sudo systemctl start ollama
+sudo systemctl enable ollama
+
+# Download the model
+ollama pull llama3.2:3b
+```
+
+**🍎 macOS:**
+
+```bash
+# Using Homebrew
+brew install ollama
 brew services start ollama
 
-# Download the model (this takes a while)
+# Or download from https://ollama.com/download/mac
+
+# Download the model
 ollama pull llama3.2:3b
 ```
 
 ### Troubleshooting
 
-**Port already in use?**
+#### Port Issues
+
+**Windows:**
+
+```powershell
+# Check what's using the port
+netstat -ano | findstr :8505
+
+# Kill process by PID
+taskkill /PID <PID> /F
+
+# Use different port
+python -m streamlit run chat_app.py --server.port 8506
+```
+
+**Linux/macOS:**
 
 ```bash
-# Kill existing processes
+# Check what's using the port
+lsof -ti:8505
+
+# Kill processes on port
 lsof -ti:8505 | xargs kill -9
 
-# Or use a different port
-/usr/bin/python3 -m streamlit run chat_app.py --server.port 8506
+# Use different port
+python3 -m streamlit run chat_app.py --server.port 8506
 ```
 
-**SSL/Certificate errors?**
-These are handled gracefully and won't break the app. The fallback processing still works perfectly.
+#### Python Version Issues
 
-**Python version issues?**
-The `run.sh` script automatically detects the right Python version. If manual setup fails, try:
+**Windows:**
+
+```powershell
+# Check Python version
+python --version
+py --list
+
+# Use specific version
+py -3.9 -m streamlit run chat_app.py --server.port 8505
+```
+
+**Linux:**
 
 ```bash
+# Check available Python versions
+ls /usr/bin/python*
+python3 --version
+
+# Use specific version
+python3.9 -m streamlit run chat_app.py --server.port 8505
+```
+
+**macOS:**
+
+```bash
+# Check Python versions
+python3 --version
+/usr/bin/python3 --version
+
+# Use system Python if Homebrew Python has issues
 /usr/bin/python3 -m streamlit run chat_app.py --server.port 8505
 ```
+
+#### Permission Issues
+
+**Linux/macOS:**
+
+```bash
+# Make run script executable
+chmod +x run.sh
+
+# If pip permission issues
+pip install --user -r requirements.txt
+```
+
+**Windows:**
+
+```powershell
+# If execution policy issues
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# If pip permission issues
+pip install --user -r requirements.txt
+```
+
+#### SSL/Certificate Errors
+
+These are handled gracefully and won't break the app. The fallback processing still works perfectly on all platforms.
+
+#### Virtual Environment Activation
+
+**Windows:**
+
+```powershell
+# PowerShell
+venv\Scripts\Activate.ps1
+
+# Command Prompt
+venv\Scripts\activate.bat
+```
+
+**Linux/macOS:**
+
+```bash
+source venv/bin/activate
+```
+
+That's it! The app works out of the box with rule-based processing on all platforms.
 
 ## File Structure
 
 ```
-ChatBot/
+nlparse/
 ├── chat_app.py           # Main Streamlit application
 ├── assistant_openai.py   # OpenAI integration
 ├── assistant_ollama.py   # Ollama integration
-├── run.sh               # Smart startup script
+├── run.sh               # Unix/Linux/macOS startup script
+├── run.bat              # Windows startup script
 ├── requirements.txt     # Dependencies
-├── env.example         # Environment variables template
+├── .gitignore          # Git ignore rules
 └── README.md           # You're reading this
 ```
 
