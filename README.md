@@ -2,6 +2,8 @@
 
 A conversational AI assistant that transforms messy human requests into clean, structured JSON data. Think of it as a smart parser that actually understands what people are asking for.
 
+> **🚀 Quick Start:** Want the best experience? [Set up Ollama (free)](#-recommended-ollama-setup-free--local) for local AI processing, or just [run it immediately](#-quick-start-without-any-ai-setup) with rule-based processing. No OpenAI API key required!
+
 ## What does this thing do?
 
 Ever tried to build a system that needs to understand user requests like "book me a table for Italian food tonight" or "find a gift for my mom's birthday"? That's exactly what NLParse handles. It takes natural language input and spits out properly structured JSON with intent classification, entity extraction, and confidence scoring.
@@ -41,9 +43,13 @@ For requests that don't fit the main categories, NLParse can search the web and 
 
 ### 🤖 Multiple AI Backends
 
-- **OpenAI GPT-3.5**: Most accurate results (requires API key)
-- **Ollama**: Local processing with Llama 3.2 (free, private)
-- **Rule-based Fallback**: Always works, even without AI setup
+Choose your preferred processing method:
+
+- **🦙 Ollama (Recommended)**: Local AI processing with Llama 3.2 - completely free, private, very accurate
+- **🤖 OpenAI GPT-3.5**: Premium accuracy, requires API key and costs money per request
+- **📝 Rule-based**: Basic keyword matching - always works as fallback, no setup required
+
+**No configuration needed** - the app automatically uses the best available option.
 
 ## Intent Coverage
 
@@ -283,9 +289,84 @@ python3 -m streamlit run chat_app.py --server.port 8505
 5. **Open your browser**
    Navigate to `http://localhost:8505`
 
-### Optional AI Setup
+### AI Backend Configuration
 
-#### OpenAI Setup (All Platforms)
+NLParse works with **three processing modes** in order of preference:
+
+1. **🤖 OpenAI GPT-3.5** - Most accurate, requires API key ($)
+2. **🦙 Ollama (Local)** - Very good accuracy, completely free, runs locally
+3. **📝 Rule-based** - Basic but reliable, no setup required
+
+**The app automatically detects and uses the best available option.**
+
+#### 🆓 **Recommended: Ollama Setup (Free & Local)**
+
+**For users without OpenAI API key, this is your best option:**
+
+**🪟 Windows:**
+
+```powershell
+# Method 1: Download installer
+# Visit: https://ollama.com/download/windows
+# Run the installer - Ollama starts automatically as a service
+
+# Method 2: Using winget
+winget install Ollama.Ollama
+
+# Download the AI model (required step)
+ollama pull llama3.2:3b
+
+# Verify it's working
+ollama list
+```
+
+**🐧 Linux:**
+
+```bash
+# Install Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Start the service
+sudo systemctl start ollama
+sudo systemctl enable ollama
+
+# Download the AI model (required step)
+ollama pull llama3.2:3b
+
+# Verify it's working
+ollama list
+systemctl status ollama
+```
+
+**🍎 macOS:**
+
+```bash
+# Method 1: Using Homebrew (recommended)
+brew install ollama
+brew services start ollama
+
+# Method 2: Download from https://ollama.com/download/mac
+
+# Download the AI model (required step)
+ollama pull llama3.2:3b
+
+# Verify it's working
+ollama list
+brew services list | grep ollama
+```
+
+**✅ Test Your Ollama Setup:**
+
+```bash
+# This should return a response from the AI
+ollama run llama3.2:3b "Hello, can you help me classify intents?"
+```
+
+If this works, **you're all set!** NLParse will automatically use Ollama when you run the app.
+
+#### 💳 **OpenAI Setup (Premium Option)**
+
+**Only set this up if you have an OpenAI API key and want the highest accuracy:**
 
 **Windows (PowerShell):**
 
@@ -310,48 +391,34 @@ export OPENAI_API_KEY="your_api_key_here"
 echo 'export OPENAI_API_KEY="your_api_key_here"' >> ~/.bashrc
 ```
 
-Get your API key from [OpenAI Platform](https://platform.openai.com/)
+Get your API key from [OpenAI Platform](https://platform.openai.com/) (requires payment)
 
-#### Ollama Setup (Local & Free)
+#### 🔧 **How NLParse Chooses AI Backend**
 
-**🪟 Windows:**
+When you start the app, it automatically:
 
-```powershell
-# Download and install from https://ollama.com/download/windows
-# Or using winget:
-winget install Ollama.Ollama
+1. **Checks for OpenAI API key** → Uses OpenAI if found
+2. **Checks if Ollama is running** → Uses Ollama if available
+3. **Falls back to rule-based processing** → Always works
 
-# Start Ollama (runs as service automatically)
-# Download the model
-ollama pull llama3.2:3b
-```
+You'll see which mode it's using in the app interface:
 
-**🐧 Linux:**
+- 🤖 **"Using OpenAI GPT-3.5"** - Premium mode
+- 🦙 **"Using Ollama Llama 3.2"** - Local AI mode
+- 📝 **"Using rule-based processing"** - Fallback mode
 
-```bash
-# Install Ollama
-curl -fsSL https://ollama.com/install.sh | sh
+#### 🚀 **Quick Start Without Any AI Setup**
 
-# Start the service
-sudo systemctl start ollama
-sudo systemctl enable ollama
-
-# Download the model
-ollama pull llama3.2:3b
-```
-
-**🍎 macOS:**
+**Want to try it immediately?** Just run the app - it works with rule-based processing:
 
 ```bash
-# Using Homebrew
-brew install ollama
-brew services start ollama
-
-# Or download from https://ollama.com/download/mac
-
-# Download the model
-ollama pull llama3.2:3b
+# No setup needed, just run:
+./run.sh        # Linux/macOS
+# or
+.\run.bat       # Windows
 ```
+
+The rule-based mode handles most common requests well, but Ollama gives much better results.
 
 ### Troubleshooting
 
@@ -443,6 +510,85 @@ pip install --user -r requirements.txt
 #### SSL/Certificate Errors
 
 These are handled gracefully and won't break the app. The fallback processing still works perfectly on all platforms.
+
+#### Ollama Troubleshooting
+
+**Ollama not detected by NLParse?**
+
+```bash
+# Check if Ollama is running
+curl http://localhost:11434/api/tags
+
+# Should return JSON with your models
+# If it fails, Ollama isn't running properly
+```
+
+**Windows - Ollama Service Issues:**
+
+```powershell
+# Check if Ollama service is running
+Get-Service -Name "*ollama*"
+
+# Restart Ollama service
+Restart-Service -Name "OllamaService"
+
+# If service doesn't exist, reinstall Ollama
+winget uninstall Ollama.Ollama
+winget install Ollama.Ollama
+```
+
+**Linux - Ollama Service Issues:**
+
+```bash
+# Check service status
+sudo systemctl status ollama
+
+# Restart service
+sudo systemctl restart ollama
+
+# Check logs
+sudo journalctl -u ollama -f
+
+# If issues persist, reinstall
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+**macOS - Ollama Issues:**
+
+```bash
+# Check if running via Homebrew
+brew services list | grep ollama
+
+# Restart service
+brew services restart ollama
+
+# Check if binary exists
+which ollama
+
+# If issues persist, reinstall
+brew uninstall ollama
+brew install ollama
+```
+
+**Model Download Issues:**
+
+```bash
+# Check available space (models are ~2GB)
+df -h
+
+# Re-download model if corrupted
+ollama rm llama3.2:3b
+ollama pull llama3.2:3b
+
+# List downloaded models
+ollama list
+```
+
+**Performance Issues:**
+
+- Ollama works better with at least 8GB RAM
+- First response is slower (model loading), subsequent ones are fast
+- On slower machines, try a smaller model: `ollama pull llama3.2:1b`
 
 #### Virtual Environment Activation
 
