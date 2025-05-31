@@ -252,27 +252,45 @@ def generate_follow_up_questions(intent_category: str, entities: Dict[str, Any])
             missing.append(field)
     
     questions = []
-    for field in missing[:3]:
+    field_names = []
+    for field in missing[:4]:  # Limit to 4 questions max
         if field == "party_size" or field == "number_of_travelers":
             questions.append("How many people will be joining?")
+            field_names.append(field)
         elif field == "date" or field == "departure_date":
             questions.append("What date are you planning for?")
+            field_names.append(field)
         elif field == "time":
             questions.append("What time would you prefer?")
+            field_names.append(field)
         elif field == "cuisine":
             questions.append("What type of cuisine are you looking for?")
+            field_names.append(field)
         elif field == "destination":
-            questions.append("Where would you like to go?")
+            if intent_category == "cab_booking":
+                questions.append("Where would you like to go?")
+            else:
+                questions.append("Where would you like to travel to?")
+            field_names.append(field)
         elif field == "pickup_location":
             questions.append("Where should we pick you up?")
+            field_names.append(field)
         elif field == "recipient":
             questions.append("Who is this gift for?")
+            field_names.append(field)
         elif field == "occasion":
             questions.append("What's the occasion?")
+            field_names.append(field)
         elif field == "budget":
             questions.append("What's your budget range?")
+            field_names.append(field)
         else:
             questions.append(f"Could you provide details about {field.replace('_', ' ')}?")
+            field_names.append(field)
+    
+    # Store the field mapping in session state
+    if 'followup_field_mapping' in st.session_state:
+        st.session_state.followup_field_mapping = field_names
     
     return questions
 
@@ -453,6 +471,10 @@ def main():
         st.session_state.pending_followups = []
     if 'current_followup_index' not in st.session_state:
         st.session_state.current_followup_index = 0
+    if 'followup_field_mapping' not in st.session_state:
+        st.session_state.followup_field_mapping = []
+    if 'all_required_fields' not in st.session_state:
+        st.session_state.all_required_fields = []
     if 'assistant' not in st.session_state:
         st.session_state.assistant = None
     if 'provider' not in st.session_state:
@@ -521,10 +543,56 @@ def main():
             st.session_state.current_intent = ""
             st.session_state.current_confidence = 0.0
             st.session_state.pending_followups = []
+            st.session_state.followup_field_mapping = []
             st.session_state.original_request = user_input
         
         add_chat_message("user", user_input)
         
+        # Handle follow-up answers directly
+        if is_followup and st.session_state.followup_field_mapping:
+            # Get the current field being asked
+            current_field_index = st.session_state.current_followup_index
+            if current_field_index < len(st.session_state.followup_field_mapping):
+                current_field = st.session_state.followup_field_mapping[current_field_index]
+                
+                # Directly map the answer to the correct field
+                st.session_state.current_entities[current_field] = user_input.strip()
+                
+                # Advance to next question
+                st.session_state.current_followup_index += 1
+                
+                # Check if we've answered all questions
+                if st.session_state.current_followup_index >= len(st.session_state.pending_followups):
+                    st.session_state.conversation_state = "complete"
+                    st.session_state.current_followup_index = 0
+                    
+                    # Generate completion message
+                    intent_text = st.session_state.current_intent.replace("_", " ").title()
+                    chat_response = f"Perfect! I've identified this as a {intent_text.lower()} request and have all the details needed."
+                    
+                    add_chat_message("assistant", chat_response, {
+                        "intent": st.session_state.current_intent,
+                        "confidence": st.session_state.current_confidence,
+                        "entities": st.session_state.current_entities,
+                        "followups": [],
+                        "processing_mode": "followup"
+                    })
+                else:
+                    # Ask next question
+                    st.session_state.conversation_state = "waiting_followup"
+                    next_question = st.session_state.pending_followups[st.session_state.current_followup_index]
+                    
+                    add_chat_message("assistant", next_question, {
+                        "intent": st.session_state.current_intent,
+                        "confidence": st.session_state.current_confidence,
+                        "entities": st.session_state.current_entities,
+                        "followups": st.session_state.pending_followups,
+                        "processing_mode": "followup"
+                    })
+                
+                return  # Exit early for follow-up processing
+        
+        # Process new request or initial classification
         ai_processing_failed = False
         fallback_reason = ""
         
@@ -593,94 +661,59 @@ def main():
             else:
                 fallback_reason = f"processing error"
         
-        # Use fallback processing if AI failed OR always for structured intents to ensure follow-ups
+        # Use fallback processing if AI failed
         if ai_processing_failed:
             if fallback_reason not in ["timeout", "network"]:
                 st.info(f"Using rule-based processing ({fallback_reason})")
             
-            input_for_classification = f"{st.session_state.original_request} {user_input}" if is_followup else user_input
-            classification_result = fallback_intent_classifier(input_for_classification)
-            
-            if st.session_state.current_entities:
-                merged_entities = st.session_state.current_entities.copy()
-                merged_entities.update(classification_result["entities"])
-                classification_result["entities"] = merged_entities
-            
-            follow_up_questions = generate_follow_up_questions(
-                classification_result["intent_category"],
-                classification_result["entities"]
-            )
+            classification_result = fallback_intent_classifier(user_input)
             
             response = type('Response', (), {
                 'intent_category': classification_result["intent_category"],
                 'entities': classification_result["entities"],
                 'confidence_score': classification_result["confidence_score"],
-                'follow_up_questions': follow_up_questions
+                'follow_up_questions': []
             })()
-        else:
-            # Even if AI succeeded, we need to check for follow-up questions for structured intents
-            if response.intent_category in ["dining", "travel", "gifting", "cab_booking"]:
-                # Merge with existing entities
-                if st.session_state.current_entities:
-                    merged_entities = st.session_state.current_entities.copy()
-                    merged_entities.update(response.entities or {})
-                    response.entities = merged_entities
-                
-                # Generate follow-up questions for missing required fields
-                follow_up_questions = generate_follow_up_questions(
-                    response.intent_category,
-                    response.entities or {}
-                )
-                response.follow_up_questions = follow_up_questions
         
-        # Update current state
+        # Update state with initial classification
         st.session_state.current_entities = response.entities.copy() if response.entities else {}
         st.session_state.current_intent = response.intent_category or ""
         st.session_state.current_confidence = response.confidence_score or 0.0
-        st.session_state.pending_followups = response.follow_up_questions.copy() if response.follow_up_questions else []
         
-        # Handle follow-up question progression
-        if is_followup and st.session_state.pending_followups:
-            # Advance to next follow-up question
-            st.session_state.current_followup_index += 1
+        # Generate follow-up questions for structured intents
+        if response.intent_category in ["dining", "travel", "gifting", "cab_booking"]:
+            follow_up_questions = generate_follow_up_questions(
+                response.intent_category,
+                st.session_state.current_entities
+            )
+            st.session_state.pending_followups = follow_up_questions
             
-            # Check if we've answered all follow-up questions
-            if st.session_state.current_followup_index >= len(st.session_state.pending_followups):
-                st.session_state.conversation_state = "complete"
-                st.session_state.current_followup_index = 0
-            else:
-                st.session_state.conversation_state = "waiting_followup"
-        else:
-            # New request or no follow-ups needed
-            if st.session_state.pending_followups:
+            if follow_up_questions:
                 st.session_state.conversation_state = "waiting_followup"
                 st.session_state.current_followup_index = 0
+                
+                # Ask first question
+                chat_response = follow_up_questions[0]
             else:
                 st.session_state.conversation_state = "complete"
-                st.session_state.current_followup_index = 0
-        
-        # Generate response message
-        if response.follow_up_questions:
-            # Ask follow-up questions one at a time
-            current_question_index = st.session_state.current_followup_index
-            if current_question_index < len(response.follow_up_questions):
-                chat_response = response.follow_up_questions[current_question_index]
-            else:
-                # All questions answered, mark as complete
-                chat_response = f"Perfect! I've identified this as a {response.intent_category.replace('_', ' ').title().lower()} request and have all the details needed."
-                st.session_state.conversation_state = "complete"
+                intent_text = response.intent_category.replace("_", " ").title()
+                chat_response = f"Perfect! I've identified this as a {intent_text.lower()} request and have all the details needed."
         else:
-            intent_text = response.intent_category.replace("_", " ").title()
+            # For "other" intent
+            st.session_state.conversation_state = "complete"
+            st.session_state.pending_followups = []
+            
             if response.intent_category == "other":
                 chat_response = "I understand this is a general inquiry. Let me help you with that."
             else:
+                intent_text = response.intent_category.replace("_", " ").title()
                 chat_response = f"Perfect! I've identified this as a {intent_text.lower()} request and have all the details needed."
         
         add_chat_message("assistant", chat_response, {
             "intent": response.intent_category,
             "confidence": response.confidence_score,
-            "entities": response.entities,
-            "followups": response.follow_up_questions,
+            "entities": st.session_state.current_entities,
+            "followups": st.session_state.pending_followups,
             "processing_mode": "fallback" if ai_processing_failed else "ai"
         })
 
@@ -690,6 +723,7 @@ def main():
         st.session_state.current_confidence = 0.0
         st.session_state.pending_followups = []
         st.session_state.current_followup_index = 0
+        st.session_state.followup_field_mapping = []
         st.session_state.conversation_state = "ready"
         st.session_state.last_processed_input = ""
         st.session_state.original_request = ""
@@ -702,6 +736,7 @@ def main():
         st.session_state.current_confidence = 0.0
         st.session_state.pending_followups = []
         st.session_state.current_followup_index = 0
+        st.session_state.followup_field_mapping = []
         st.session_state.conversation_state = "ready"
         st.session_state.last_processed_input = ""
         st.session_state.original_request = ""
